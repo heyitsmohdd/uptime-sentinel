@@ -99,3 +99,9 @@ func (db *Database) DeleteOldChecks(days int) error {
 	_, err := db.conn.Exec(query, cutoff)
 	return err
 }
+
+func (db *Database) DeleteMonitorAndChecks(url string) error {
+	query := `DELETE FROM checks WHERE url = ?`
+	_, err := db.conn.Exec(query, url)
+	return err
+}

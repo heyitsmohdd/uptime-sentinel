@@ -67,6 +67,23 @@ func (s *Service) AddURL(url string) {
 	s.logger.Info("added url to monitor", "url", url)
 }
 
+func (s *Service) RemoveURL(url string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var newURLs []string
+	for _, u := range s.urls {
+		if u != url {
+			newURLs = append(newURLs, u)
+		}
+	}
+
+	if len(newURLs) != len(s.urls) {
+		s.urls = newURLs
+		s.logger.Info("removed url from monitor", "url", url)
+	}
+}
+
 func (s *Service) monitorLoop() {
 	s.checkAllURLs()
 
