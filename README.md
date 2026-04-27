@@ -43,7 +43,7 @@ You'll need:
 **1. Clone the repository**
 
 ```bash
-git clone https://github.com/shariqattarr/uptime-sentinel.git
+git clone https://github.com/heyitsmohdd/uptime-sentinel.git
 cd uptime-sentinel
 ```
 
