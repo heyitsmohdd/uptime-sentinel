@@ -29,6 +29,11 @@ func main() {
 		port = "8080"
 	}
 
+	apiKey := os.Getenv("API_KEY")
+	if apiKey == "" {
+		logger.Warn("API_KEY is not set. Dashboard is unprotected!")
+	}
+
 	webhookURL := os.Getenv("WEBHOOK_URL")
 
 	database, err := db.NewDatabase("./uptime.db")
@@ -51,9 +56,25 @@ func main() {
 		logger:  logger,
 	}
 
+	authMiddleware := func(next http.HandlerFunc) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			if apiKey == "" || r.Method == http.MethodOptions {
+				next(w, r)
+				return
+			}
+
+			key := r.Header.Get("X-API-Key")
+			if key != apiKey {
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
+			next(w, r)
+		}
+	}
+
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/status", server.handleGetStatus)
-	mux.HandleFunc("/api/monitor", server.handleMonitor)
+	mux.HandleFunc("/api/status", authMiddleware(server.handleGetStatus))
+	mux.HandleFunc("/api/monitor", authMiddleware(server.handleMonitor))
 
 	handler := enableCORS(mux)
 
@@ -143,7 +164,7 @@ func enableCORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-API-Key")
 
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)

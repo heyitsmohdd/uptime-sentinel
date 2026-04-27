@@ -2,9 +2,10 @@ import { useState } from 'react'
 
 interface AddMonitorFormProps {
     onMonitorAdded: () => void
+    apiKey: string
 }
 
-export default function AddMonitorForm({ onMonitorAdded }: AddMonitorFormProps) {
+export default function AddMonitorForm({ onMonitorAdded, apiKey }: AddMonitorFormProps) {
     const [url, setUrl] = useState('')
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [error, setError] = useState('')
@@ -27,6 +28,7 @@ export default function AddMonitorForm({ onMonitorAdded }: AddMonitorFormProps) 
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'X-API-Key': apiKey
                 },
                 body: JSON.stringify({ url: url.trim() }),
             })
