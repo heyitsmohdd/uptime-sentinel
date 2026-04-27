@@ -74,17 +74,20 @@ func (s *Service) Stop() {
 
 func (s *Service) AddURL(url string) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	for _, u := range s.urls {
 		if u == url {
+			s.mu.Unlock()
 			return
 		}
 	}
 
 	s.urls = append(s.urls, url)
 	s.status[url] = true // Assume UP initially
+	s.mu.Unlock()
+
 	s.logger.Info("added url to monitor", "url", url)
+	s.checkURL(url) // Immediate synchronous check
 }
 
 func (s *Service) RemoveURL(url string) {
@@ -137,7 +140,7 @@ func (s *Service) pruneLoop() {
 
 func (s *Service) pruneOldData() {
 	s.logger.Info("running database pruning for old checks")
-	if err := s.db.DeleteOldChecks(30); err != nil {
+	if err := s.db.DeleteOldChecks(365); err != nil {
 		s.logger.Error("failed to prune old checks", "error", err)
 	}
 }

@@ -2,13 +2,22 @@ import { useState } from 'react'
 import useSWR from 'swr'
 import StatusCard from './components/StatusCard'
 import AddMonitorForm from './components/AddMonitorForm'
+import MonitorDetailsModal from './components/MonitorDetailsModal'
 
-interface Check {
-    id: number
+interface CheckHistory {
+    status_code: number
+    latency: number
+    created_at: string
+}
+
+interface MonitorStats {
     url: string
     status_code: number
     latency: number
     created_at: string
+    uptime_percentage: number
+    average_latency: number
+    history: CheckHistory[]
 }
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080'
@@ -23,8 +32,9 @@ function App() {
     const [refreshKey, setRefreshKey] = useState(0)
     const [apiKey, setApiKey] = useState(localStorage.getItem('uptime_api_key') || '')
     const [keyInput, setKeyInput] = useState('')
+    const [selectedMonitor, setSelectedMonitor] = useState<string | null>(null)
 
-    const { data, error, isLoading } = useSWR<Check[]>(
+    const { data, error, isLoading } = useSWR<MonitorStats[]>(
         [`${API_URL}/api/status?refresh=${refreshKey}`, apiKey],
         fetcher,
         {
@@ -89,6 +99,14 @@ function App() {
                 </div>
             )}
 
+            {selectedMonitor && (
+                <MonitorDetailsModal 
+                    url={selectedMonitor} 
+                    apiKey={apiKey} 
+                    onClose={() => setSelectedMonitor(null)} 
+                />
+            )}
+
             <div className="container mx-auto px-4 py-8">
                 <header className="mb-12 flex justify-between items-start">
                     <div>
@@ -141,11 +159,12 @@ function App() {
                     )}
 
                     {data &&
-                        data.map((check) => (
+                        data.map((stat) => (
                             <StatusCard 
-                                key={check.id} 
-                                check={check} 
-                                onDelete={() => handleDeleteMonitor(check.url)} 
+                                key={stat.url} 
+                                stat={stat} 
+                                onDelete={() => handleDeleteMonitor(stat.url)} 
+                                onClick={() => setSelectedMonitor(stat.url)}
                             />
                         ))}
                 </div>

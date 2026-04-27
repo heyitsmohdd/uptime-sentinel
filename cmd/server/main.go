@@ -75,6 +75,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/status", authMiddleware(server.handleGetStatus))
 	mux.HandleFunc("/api/monitor", authMiddleware(server.handleMonitor))
+	mux.HandleFunc("/api/monitor/details", authMiddleware(server.handleMonitorDetails))
 
 	handler := enableCORS(mux)
 
@@ -104,9 +105,9 @@ func (s *Server) handleGetStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	checks, err := s.db.GetLatestChecks()
+	checks, err := s.db.GetDashboardStats()
 	if err != nil {
-		s.logger.Error("failed to get checks", "error", err)
+		s.logger.Error("failed to get stats", "error", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -158,6 +159,29 @@ func (s *Server) handleMonitor(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+}
+
+func (s *Server) handleMonitorDetails(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	url := r.URL.Query().Get("url")
+	if url == "" {
+		http.Error(w, "url parameter is required", http.StatusBadRequest)
+		return
+	}
+
+	details, err := s.db.GetMonitorDetails(url)
+	if err != nil {
+		s.logger.Error("failed to get monitor details", "error", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(details)
 }
 
 func enableCORS(next http.Handler) http.Handler {
