@@ -39,6 +39,7 @@ func (s *Service) Start() error {
 
 	s.ticker = time.NewTicker(60 * time.Second)
 	go s.monitorLoop()
+	go s.pruneLoop()
 
 	s.logger.Info("monitor service started", "url_count", len(existingURLs))
 	return nil
@@ -76,6 +77,30 @@ func (s *Service) monitorLoop() {
 		case <-s.stopChan:
 			return
 		}
+	}
+}
+
+func (s *Service) pruneLoop() {
+	pruneTicker := time.NewTicker(24 * time.Hour)
+	defer pruneTicker.Stop()
+
+	// Run once on startup
+	s.pruneOldData()
+
+	for {
+		select {
+		case <-pruneTicker.C:
+			s.pruneOldData()
+		case <-s.stopChan:
+			return
+		}
+	}
+}
+
+func (s *Service) pruneOldData() {
+	s.logger.Info("running database pruning for old checks")
+	if err := s.db.DeleteOldChecks(30); err != nil {
+		s.logger.Error("failed to prune old checks", "error", err)
 	}
 }
 
