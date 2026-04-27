@@ -11,12 +11,14 @@ interface Check {
     created_at: string
 }
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080'
+
 const fetcher = (url: string) => fetch(url).then((res) => res.json())
 
 function App() {
     const [refreshKey, setRefreshKey] = useState(0)
     const { data, error, isLoading } = useSWR<Check[]>(
-        `http://localhost:8080/api/status?refresh=${refreshKey}`,
+        `${API_URL}/api/status?refresh=${refreshKey}`,
         fetcher,
         {
             refreshInterval: 10000,
@@ -29,7 +31,7 @@ function App() {
 
     const handleDeleteMonitor = async (url: string) => {
         try {
-            await fetch(`http://localhost:8080/api/monitor?url=${encodeURIComponent(url)}`, {
+            await fetch(`${API_URL}/api/monitor?url=${encodeURIComponent(url)}`, {
                 method: 'DELETE',
             })
             setRefreshKey((prev) => prev + 1)

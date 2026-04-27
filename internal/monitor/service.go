@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
+	"strconv"
 	"sync"
 	"time"
 	"uptime-sentinel/internal/db"
@@ -47,7 +49,14 @@ func (s *Service) Start() error {
 	}
 	s.mu.Unlock()
 
-	s.ticker = time.NewTicker(60 * time.Second)
+	pollInterval := 60
+	if envVal := os.Getenv("POLL_INTERVAL"); envVal != "" {
+		if val, err := strconv.Atoi(envVal); err == nil && val > 0 {
+			pollInterval = val
+		}
+	}
+
+	s.ticker = time.NewTicker(time.Duration(pollInterval) * time.Second)
 	go s.monitorLoop()
 	go s.pruneLoop()
 

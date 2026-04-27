@@ -9,6 +9,8 @@ export default function AddMonitorForm({ onMonitorAdded }: AddMonitorFormProps) 
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [error, setError] = useState('')
 
+    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080'
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
         setError('')
@@ -21,7 +23,7 @@ export default function AddMonitorForm({ onMonitorAdded }: AddMonitorFormProps) 
         setIsSubmitting(true)
 
         try {
-            const response = await fetch('http://localhost:8080/api/monitor', {
+            const response = await fetch(`${API_URL}/api/monitor`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

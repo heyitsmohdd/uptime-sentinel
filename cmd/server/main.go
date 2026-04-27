@@ -9,6 +9,8 @@ import (
 	"syscall"
 	"uptime-sentinel/internal/db"
 	"uptime-sentinel/internal/monitor"
+
+	"github.com/joho/godotenv"
 )
 
 type Server struct {
@@ -20,6 +22,15 @@ type Server struct {
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 
+	_ = godotenv.Load()
+
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
+	webhookURL := os.Getenv("WEBHOOK_URL")
+
 	database, err := db.NewDatabase("./uptime.db")
 	if err != nil {
 		logger.Error("failed to initialize database", "error", err)
@@ -27,7 +38,7 @@ func main() {
 	}
 	defer database.Close()
 
-	monitorService := monitor.NewService(database, logger, "")
+	monitorService := monitor.NewService(database, logger, webhookURL)
 	if err := monitorService.Start(); err != nil {
 		logger.Error("failed to start monitor service", "error", err)
 		os.Exit(1)
@@ -47,7 +58,7 @@ func main() {
 	handler := enableCORS(mux)
 
 	httpServer := &http.Server{
-		Addr:    ":8080",
+		Addr:    ":" + port,
 		Handler: handler,
 	}
 
