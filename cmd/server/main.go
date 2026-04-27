@@ -27,7 +27,7 @@ func main() {
 	}
 	defer database.Close()
 
-	monitorService := monitor.NewService(database, logger)
+	monitorService := monitor.NewService(database, logger, "")
 	if err := monitorService.Start(); err != nil {
 		logger.Error("failed to start monitor service", "error", err)
 		os.Exit(1)

@@ -1,7 +1,10 @@
 package monitor
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"sync"
@@ -10,20 +13,24 @@ import (
 )
 
 type Service struct {
-	db       *db.Database
-	urls     []string
-	mu       sync.RWMutex
-	ticker   *time.Ticker
-	stopChan chan struct{}
-	logger   *slog.Logger
+	db         *db.Database
+	urls       []string
+	status     map[string]bool // true = up, false = down
+	webhookURL string
+	mu         sync.RWMutex
+	ticker     *time.Ticker
+	stopChan   chan struct{}
+	logger     *slog.Logger
 }
 
-func NewService(database *db.Database, logger *slog.Logger) *Service {
+func NewService(database *db.Database, logger *slog.Logger, webhookURL string) *Service {
 	return &Service{
-		db:       database,
-		urls:     []string{},
-		logger:   logger,
-		stopChan: make(chan struct{}),
+		db:         database,
+		urls:       []string{},
+		status:     make(map[string]bool),
+		webhookURL: webhookURL,
+		logger:     logger,
+		stopChan:   make(chan struct{}),
 	}
 }
 
@@ -35,6 +42,9 @@ func (s *Service) Start() error {
 
 	s.mu.Lock()
 	s.urls = existingURLs
+	for _, u := range existingURLs {
+		s.status[u] = true // Assume UP initially to prevent startup alert spam
+	}
 	s.mu.Unlock()
 
 	s.ticker = time.NewTicker(60 * time.Second)
@@ -64,6 +74,7 @@ func (s *Service) AddURL(url string) {
 	}
 
 	s.urls = append(s.urls, url)
+	s.status[url] = true // Assume UP initially
 	s.logger.Info("added url to monitor", "url", url)
 }
 
@@ -80,6 +91,7 @@ func (s *Service) RemoveURL(url string) {
 
 	if len(newURLs) != len(s.urls) {
 		s.urls = newURLs
+		delete(s.status, url)
 		s.logger.Info("removed url from monitor", "url", url)
 	}
 }
@@ -153,11 +165,27 @@ func (s *Service) checkURL(url string) {
 	latency := time.Since(start).Milliseconds()
 
 	statusCode := 0
+	isCurrentlyUp := false
+
 	if err != nil {
 		s.logger.Warn("check failed", "url", url, "error", err)
 	} else {
 		statusCode = resp.StatusCode
 		resp.Body.Close()
+		if statusCode >= 200 && statusCode < 400 {
+			isCurrentlyUp = true
+		}
+	}
+
+	s.mu.Lock()
+	wasUp := s.status[url]
+	s.status[url] = isCurrentlyUp
+	s.mu.Unlock()
+
+	if wasUp && !isCurrentlyUp {
+		s.sendWebhookAlert(url, "DOWN", statusCode)
+	} else if !wasUp && isCurrentlyUp {
+		s.sendWebhookAlert(url, "UP", statusCode)
 	}
 
 	if err := s.db.InsertCheck(url, statusCode, latency); err != nil {
@@ -166,4 +194,29 @@ func (s *Service) checkURL(url string) {
 	}
 
 	s.logger.Info("check completed", "url", url, "status", statusCode, "latency_ms", latency)
+}
+
+func (s *Service) sendWebhookAlert(url, state string, statusCode int) {
+	if s.webhookURL == "" {
+		return
+	}
+
+	payload := map[string]string{
+		"content": fmt.Sprintf("🚨 **Monitor Alert** 🚨\nURL: %s\nState: **%s**\nStatus Code: %d", url, state, statusCode),
+	}
+
+	body, _ := json.Marshal(payload)
+	req, err := http.NewRequest(http.MethodPost, s.webhookURL, bytes.NewBuffer(body))
+	if err != nil {
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	req = req.WithContext(ctx)
+
+	if _, err := http.DefaultClient.Do(req); err != nil {
+		s.logger.Error("failed to send webhook alert", "error", err)
+	}
 }
