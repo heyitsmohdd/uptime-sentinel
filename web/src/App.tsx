@@ -27,6 +27,17 @@ function App() {
         setRefreshKey((prev) => prev + 1)
     }
 
+    const handleDeleteMonitor = async (url: string) => {
+        try {
+            await fetch(`http://localhost:8080/api/monitor?url=${encodeURIComponent(url)}`, {
+                method: 'DELETE',
+            })
+            setRefreshKey((prev) => prev + 1)
+        } catch (err) {
+            console.error('Failed to delete monitor', err)
+        }
+    }
+
     return (
         <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
             <div className="container mx-auto px-4 py-8">
@@ -72,7 +83,11 @@ function App() {
 
                     {data &&
                         data.map((check) => (
-                            <StatusCard key={check.id} check={check} />
+                            <StatusCard 
+                                key={check.id} 
+                                check={check} 
+                                onDelete={() => handleDeleteMonitor(check.url)} 
+                            />
                         ))}
                 </div>
             </div>

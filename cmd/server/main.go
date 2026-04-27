@@ -42,7 +42,7 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/status", server.handleGetStatus)
-	mux.HandleFunc("/api/monitor", server.handleAddMonitor)
+	mux.HandleFunc("/api/monitor", server.handleMonitor)
 
 	handler := enableCORS(mux)
 
@@ -83,37 +83,55 @@ func (s *Server) handleGetStatus(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(checks)
 }
 
-func (s *Server) handleAddMonitor(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+func (s *Server) handleMonitor(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodPost {
+		var payload struct {
+			URL string `json:"url"`
+		}
+
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			http.Error(w, "invalid request body", http.StatusBadRequest)
+			return
+		}
+
+		if payload.URL == "" {
+			http.Error(w, "url is required", http.StatusBadRequest)
+			return
+		}
+
+		s.monitor.AddURL(payload.URL)
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(map[string]string{"status": "added"})
 		return
 	}
 
-	var payload struct {
-		URL string `json:"url"`
-	}
+	if r.Method == http.MethodDelete {
+		url := r.URL.Query().Get("url")
+		if url == "" {
+			http.Error(w, "url parameter is required", http.StatusBadRequest)
+			return
+		}
 
-	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+		s.monitor.RemoveURL(url)
+		if err := s.db.DeleteMonitorAndChecks(url); err != nil {
+			s.logger.Error("failed to delete monitor from db", "error", err)
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+
+		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 
-	if payload.URL == "" {
-		http.Error(w, "url is required", http.StatusBadRequest)
-		return
-	}
-
-	s.monitor.AddURL(payload.URL)
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]string{"status": "added"})
+	http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 }
 
 func enableCORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 
 		if r.Method == http.MethodOptions {
