@@ -92,3 +92,10 @@ func (db *Database) GetMonitoredURLs() ([]string, error) {
 
 	return urls, rows.Err()
 }
+
+func (db *Database) DeleteOldChecks(days int) error {
+	cutoff := time.Now().AddDate(0, 0, -days)
+	query := `DELETE FROM checks WHERE created_at < ?`
+	_, err := db.conn.Exec(query, cutoff)
+	return err
+}
